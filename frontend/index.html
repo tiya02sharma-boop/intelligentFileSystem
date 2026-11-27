@@ -343,8 +343,8 @@ h1{color:#fff;text-shadow:0 2px 14px rgba(43,24,80,.35)}
 
     <!-- ================= BENCHMARK ================= -->
     <section class="view" id="view-bench">
-      <h1>Benchmark: General Tree vs BST</h1>
-      <p class="sub">Compare exact-name search through the directory tree with the indexed Name BST. The live race uses your current filesystem; the scaling run builds temporary datasets.</p>
+      <h1>Live Search Comparisons</h1>
+      <p class="sub">Compare searches against the filesystem currently open in the app. These results use your files and folders, not generated sample data.</p>
       <div class="bench-stack">
         <div class="panel">
           <div class="bench-panel-head">
@@ -360,27 +360,16 @@ h1{color:#fff;text-shadow:0 2px 14px rgba(43,24,80,.35)}
           <div class="list" id="raceRes" style="margin-top:14px"></div>
         </div>
         <div class="panel">
-          <div class="bench-panel-head">
-            <h3>Scaling benchmark</h3>
-            <div class="toolbar" style="margin:0">
-              <div class="seg-sm" id="benchOrderSeg" role="group" aria-label="BST insertion order">
-                <button type="button" data-sorted="0" class="on">Random input</button>
-                <button type="button" data-sorted="1">Sorted input</button>
-              </div>
-              <button class="btn b-violet" id="benchRunBtn">Run Benchmark</button>
-            </div>
+          <div class="bench-panel-head"><h3>Live file-size search comparison</h3><span class="hint" style="color:var(--muted)">General Tree scan vs Size BST on the current filesystem</span></div>
+          <div class="toolbar" style="margin-bottom:12px">
+            <div class="field" style="margin:0;min-width:180px"><label for="liveSizeMode">Search type</label><select id="liveSizeMode"><option value="exact">Exact size</option><option value="range">Size range</option></select></div>
+            <div class="field" id="liveExactFields" style="margin:0;flex:1;min-width:180px"><label for="liveSizeExact">File size (bytes)</label><input id="liveSizeExact" type="number" min="0" placeholder="e.g. 4096"></div>
+            <div class="field" id="liveRangeFields" style="display:none;margin:0;flex:1;min-width:160px"><label for="liveSizeMin">Minimum size (bytes)</label><input id="liveSizeMin" type="number" min="0" placeholder="0"></div>
+            <div class="field" id="liveRangeMaxField" style="display:none;margin:0;flex:1;min-width:160px"><label for="liveSizeMax">Maximum size (bytes)</label><input id="liveSizeMax" type="number" min="0" placeholder="1000000"></div>
+            <button class="btn b-violet" id="liveSizeBtn">Compare Size Search</button>
           </div>
-          <p class="hint" style="color:var(--muted);margin-bottom:12px">Measures repeated successful searches from 100 to 5,000 indexed names. Sorted input shows how an unbalanced BST can degrade.</p>
-          <div id="benchNote"></div>
-          <div class="stats" id="benchStats"></div>
-          <div class="two" id="benchCharts" style="margin-bottom:16px"></div>
-          <div tabindex="0" role="region" aria-labelledby="bench-table-caption" class="table-wrapper">
-            <table class="bench-tbl" id="benchTbl">
-              <caption id="bench-table-caption">General Tree DFS vs Name BST search performance by dataset size</caption>
-              <thead><tr><th>Items (N)</th><th>General Tree (ms)</th><th>Name BST (ms)</th><th>Tree avg comparisons</th><th>BST avg comparisons</th><th>BST height</th><th>Speedup</th></tr></thead>
-              <tbody id="benchTbody"><tr><td colspan="7" class="hint" style="color:var(--muted)">Run the benchmark to compare both search methods.</td></tr></tbody>
-            </table>
-          </div>
+          <div id="liveSizeInfo" aria-live="polite"></div>
+          <div class="list" id="liveSizeResults" style="margin-top:14px"></div>
         </div>
       </div>
     </section>
@@ -759,7 +748,9 @@ function resultList(el, items, withPath = true) {
 
 function cmpBanner(summary, treeCmp, bstCmp, bstLabel) {
   const max = Math.max(1, treeCmp, bstCmp);
-  const ratio = bstCmp > 0 ? (treeCmp / bstCmp).toFixed(1) + '× fewer comparisons' : '0 comparisons';
+  const ratio = treeCmp === bstCmp ? 'same number of comparisons' : treeCmp > bstCmp
+    ? (bstCmp > 0 ? (treeCmp / bstCmp).toFixed(1) + '× fewer than General Tree' : 'no BST nodes checked')
+    : (treeCmp > 0 ? (bstCmp / treeCmp).toFixed(1) + '× more than General Tree' : 'General Tree checked no nodes');
   return `<div class="note">${summary}
     <div style="margin-top:10px;display:grid;gap:4px">
       <div class="hb"><span class="l" style="width:92px">General Tree</span><span class="tr"><i style="width:${(treeCmp / max * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v" style="width:110px">${treeCmp} cmp (O(n))</span></div>
@@ -860,15 +851,7 @@ async function loadStats() {
 }
 $('#sstart').onchange = guard(loadStats);
 
-/* ---------- General Tree vs BST benchmark */
-let benchSorted = 0;
-$$('#benchOrderSeg button').forEach(btn => {
-  btn.onclick = () => {
-    benchSorted = Number(btn.dataset.sorted);
-    $$('#benchOrderSeg button').forEach(b => b.classList.toggle('on', b === btn));
-  };
-});
-
+/* ---------- Live General Tree vs BST comparisons */
 async function runRace() {
   const q = $('#raceQ').value.trim();
   if (!q) return toast('Enter an exact file or folder name', 'err');
@@ -879,14 +862,14 @@ async function runRace() {
     const d = await api('/api/race?q=' + enc(q));
     const cmpRatio = d.bstCmp > 0 ? (d.treeCmp / d.bstCmp).toFixed(1) : '—';
     const timeRatio = d.bstUs > 0.01 ? (d.treeUs / d.bstUs).toFixed(1) : '—';
-    $('#raceInfo').innerHTML = `<div class="note"><b>${d.matches}</b> result${d.matches === 1 ? '' : 's'} for <code>${esc(d.query)}</code>. General Tree DFS visited <b>${d.treeCmp}</b> of ${d.totalNodes} total nodes (${d.treeUs.toFixed(2)} µs average); Name BST visited <b>${d.bstCmp}</b> of ${d.bstKeys} name keys, with height ${d.bstHeight} (${d.bstUs.toFixed(2)} µs average). Tree/BST ratios: <b>${cmpRatio}×</b> comparisons and <b>${timeRatio}×</b> time.</div>`;
+    $('#raceInfo').innerHTML = `<div class="note"><b>${d.matches}</b> result${d.matches === 1 ? '' : 's'} for <code>${esc(d.query)}</code>. General Tree DFS visited <b>${d.treeCmp}</b> of ${d.totalNodes} current filesystem nodes (${d.treeUs.toFixed(2)} µs average); Name BST visited <b>${d.bstCmp}</b> of ${d.bstKeys} name keys, with height ${d.bstHeight} (${d.bstUs.toFixed(2)} µs average). Tree/BST ratios: <b>${cmpRatio}×</b> comparisons and <b>${timeRatio}×</b> time.</div>`;
     const maxCmp = Math.max(1, d.treeCmp, d.bstCmp);
     const maxUs = Math.max(0.01, d.treeUs, d.bstUs);
     $('#raceBars').innerHTML = `<div class="two">
-      <div class="chart"><h4>Comparisons per search</h4><div class="leg"><span class="a">General Tree</span><span class="b">Name BST</span></div>
+      <div class="chart"><h4>Comparisons for this name</h4><div class="leg"><span class="a">General Tree</span><span class="b">Name BST</span></div>
         <div class="hb"><span class="l">Tree</span><span class="tr"><i style="width:${(d.treeCmp / maxCmp * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v">${d.treeCmp}</span></div>
         <div class="hb"><span class="l">BST</span><span class="tr"><i style="width:${(d.bstCmp / maxCmp * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v">${d.bstCmp}</span></div></div>
-      <div class="chart"><h4>Average latency (µs)</h4><div class="leg"><span class="a">General Tree</span><span class="b">Name BST</span></div>
+      <div class="chart"><h4>Average time per search (µs)</h4><div class="leg"><span class="a">General Tree</span><span class="b">Name BST</span></div>
         <div class="hb"><span class="l">Tree</span><span class="tr"><i style="width:${(d.treeUs / maxUs * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v">${d.treeUs.toFixed(2)} µs</span></div>
         <div class="hb"><span class="l">BST</span><span class="tr"><i style="width:${(d.bstUs / maxUs * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v">${d.bstUs.toFixed(2)} µs</span></div></div>
       </div>`;
@@ -899,36 +882,46 @@ async function runRace() {
 $('#raceBtn').onclick = guard(runRace);
 $('#raceQ').onkeydown = e => { if (e.key === 'Enter') $('#raceBtn').click(); };
 
-async function runScalingBench() {
-  const btn = $('#benchRunBtn');
+function updateLiveSizeFields() {
+  const isRange = $('#liveSizeMode').value === 'range';
+  $('#liveExactFields').style.display = isRange ? 'none' : '';
+  $('#liveRangeFields').style.display = isRange ? '' : 'none';
+  $('#liveRangeMaxField').style.display = isRange ? '' : 'none';
+}
+$('#liveSizeMode').onchange = updateLiveSizeFields;
+
+async function runLiveSizeComparison() {
+  const mode = $('#liveSizeMode').value;
+  let path, summary;
+  if (mode === 'exact') {
+    const size = $('#liveSizeExact').value.trim();
+    if (!size) return toast('Enter a file size in bytes', 'err');
+    path = `/api/search?mode=size_exact&size=${enc(size)}`;
+    summary = `Exact file size <b>${esc(size)} bytes</b>`;
+  } else {
+    const min = $('#liveSizeMin').value.trim() || '0';
+    const max = $('#liveSizeMax').value.trim() || '1000000000000';
+    path = `/api/search?mode=size_range&min=${enc(min)}&max=${enc(max)}`;
+    summary = `File size range <b>${esc(min)}–${esc(max)} bytes</b>`;
+  }
+  const btn = $('#liveSizeBtn');
   btn.disabled = true;
-  btn.textContent = 'Running…';
+  btn.textContent = 'Comparing…';
   try {
-    const d = await api('/api/benchmark?sorted=' + benchSorted);
-    const rows = d.rows || [];
-    if (!rows.length) return;
-    const last = rows[rows.length - 1];
-    const peakSpeedup = Math.max(...rows.map(r => r.speedup));
-    $('#benchNote').innerHTML = d.sorted
-      ? `<div class="note"><b>Sorted input:</b> The unbalanced Name BST reached height <b>${last.bstHeight}</b> at N = ${last.n.toLocaleString()}, so its search cost grows toward O(n).</div>`
-      : `<div class="note"><b>Random input:</b> Compare the full tree scan with the Name BST at each dataset size. This sample’s BST height is <b>${last.bstHeight}</b> at N = ${last.n.toLocaleString()}.</div>`;
-    statCards($('#benchStats'), [
-      ['Largest dataset', last.n.toLocaleString(), last.queries + ' queries'],
-      ['Peak speedup', peakSpeedup.toFixed(1) + '×', 'tree/BST time ratio'],
-      ['Tree comparisons', Math.round(last.treeAvgCmp).toLocaleString(), 'average per query'],
-      ['BST comparisons', last.bstAvgCmp.toFixed(1), 'height ' + last.bstHeight]
-    ]);
-    const maxMs = Math.max(0.01, ...rows.flatMap(r => [r.treeMs, r.bstMs]));
-    const maxCmp = Math.max(1, ...rows.flatMap(r => [r.treeAvgCmp, r.bstAvgCmp]));
-    $('#benchCharts').innerHTML = `<div class="chart"><h4>Total search time (ms)</h4><div class="leg"><span class="a">General Tree DFS</span><span class="b">Name BST</span></div>${rows.map(r => `<div class="grp"><small>N = ${r.n.toLocaleString()} (${r.queries} queries)</small><div class="hb"><span class="l">Tree</span><span class="tr"><i style="width:${(r.treeMs / maxMs * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v">${r.treeMs.toFixed(3)} ms</span></div><div class="hb"><span class="l">BST</span><span class="tr"><i style="width:${(r.bstMs / maxMs * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v">${r.bstMs.toFixed(3)} ms</span></div></div>`).join('')}</div>
-      <div class="chart"><h4>Average comparisons per query</h4><div class="leg"><span class="a">General Tree DFS</span><span class="b">Name BST</span></div>${rows.map(r => `<div class="grp"><small>N = ${r.n.toLocaleString()} (BST height ${r.bstHeight})</small><div class="hb"><span class="l">Tree</span><span class="tr"><i style="width:${(r.treeAvgCmp / maxCmp * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v">${r.treeAvgCmp.toFixed(1)}</span></div><div class="hb"><span class="l">BST</span><span class="tr"><i style="width:${(r.bstAvgCmp / maxCmp * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v">${r.bstAvgCmp.toFixed(1)}</span></div></div>`).join('')}</div>`;
-    $('#benchTbody').innerHTML = rows.map(r => `<tr><th scope="row">${r.n.toLocaleString()}</th><td>${r.treeMs.toFixed(3)}</td><td>${r.bstMs.toFixed(3)}</td><td>${r.treeAvgCmp.toFixed(1)}</td><td>${r.bstAvgCmp.toFixed(1)}</td><td>${r.bstHeight}</td><td><b>${r.speedup.toFixed(1)}×</b></td></tr>`).join('');
+    const d = await api(path);
+    const bstLabel = mode === 'exact' ? 'Size BST' : 'Size BST range';
+    $('#liveSizeInfo').innerHTML = cmpBanner(
+      `${summary} · <b>${d.results.length}</b> matching file${d.results.length === 1 ? '' : 's'} · Size BST height ${d.sizeBstHeight}.`,
+      d.treeComparisons, d.comparisons, bstLabel
+    );
+    resultList($('#liveSizeResults'), d.results);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Run Benchmark';
+    btn.textContent = 'Compare Size Search';
   }
 }
-$('#benchRunBtn').onclick = guard(runScalingBench);
+$('#liveSizeBtn').onclick = guard(runLiveSizeComparison);
+['#liveSizeExact', '#liveSizeMin', '#liveSizeMax'].forEach(id => $(id).onkeydown = e => { if (e.key === 'Enter') $('#liveSizeBtn').click(); });
 
 /* ---------- boot */
 (async () => {
