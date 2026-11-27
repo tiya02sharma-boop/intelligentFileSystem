@@ -688,7 +688,10 @@ static void handle(int fd) {
 }
 
 int main(int argc, char** argv) {
-    int port = argc > 1 ? atoi(argv[1]) : 8080;
+    // Railway / Render set the PORT env var; fall back to argv[1] then 8080
+    int port = 8080;
+    if (const char* envPort = std::getenv("PORT")) port = atoi(envPort);
+    else if (argc > 1) port = atoi(argv[1]);
     if (argc > 2) g_web = argv[2];
 #ifdef _WIN32
     WSADATA wsa; WSAStartup(MAKEWORD(2, 2), &wsa);
@@ -705,7 +708,7 @@ int main(int argc, char** argv) {
     setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, (const char*)&one, sizeof one);
     sockaddr_in a{};
     a.sin_family = AF_INET;
-    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    a.sin_addr.s_addr = htonl(INADDR_ANY);   // 0.0.0.0 — required for Railway/Render
     a.sin_port = htons(port);
     if (bind(srv, (sockaddr*)&a, sizeof a) < 0 || listen(srv, 16) < 0) { perror("bind/listen"); return 1; }
     std::cout << "Intelligent File System running at http://localhost:" << port << "  (frontend: " << g_web << ")\n";
