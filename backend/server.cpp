@@ -354,6 +354,8 @@ static Resp api(const std::string& method, const std::string& route, Query& q) {
     }
     if (route == "/api/search") {
         std::string mode = need("mode");
+        Stats treeSt = fs.stats(fs.root);
+        long long treeNodes = treeSt.files + treeSt.dirs;
         if (mode == "size_range") {
             long long minSize = 0, maxSize = 1000000000000000LL;
             try {
@@ -369,6 +371,7 @@ static Resp api(const std::string& method, const std::string& route, Query& q) {
             return ok("{\"ok\":true,\"mode\":\"size_range\",\"minSize\":" + std::to_string(minSize) +
                       ",\"maxSize\":" + std::to_string(maxSize) +
                       ",\"comparisons\":" + std::to_string(cmp) +
+                      ",\"treeComparisons\":" + std::to_string(treeNodes) +
                       ",\"sizeBstKeys\":" + std::to_string(fs.sizeBst.keys()) +
                       ",\"sizeBstHeight\":" + std::to_string(fs.sizeBst.height()) +
                       ",\"sizeBstFiles\":" + std::to_string(fs.sizeBst.totalFiles()) +
@@ -387,6 +390,7 @@ static Resp api(const std::string& method, const std::string& route, Query& q) {
             std::vector<const Node*> r = fs.searchExactSize(sz, cmp);
             return ok("{\"ok\":true,\"mode\":\"size_exact\",\"size\":" + std::to_string(sz) +
                       ",\"comparisons\":" + std::to_string(cmp) +
+                      ",\"treeComparisons\":" + std::to_string(treeNodes) +
                       ",\"sizeBstKeys\":" + std::to_string(fs.sizeBst.keys()) +
                       ",\"sizeBstHeight\":" + std::to_string(fs.sizeBst.height()) +
                       ",\"sizeBstFiles\":" + std::to_string(fs.sizeBst.totalFiles()) +
@@ -401,6 +405,7 @@ static Resp api(const std::string& method, const std::string& route, Query& q) {
         else if (mode == "contains") r = fs.searchContains(term, cmp);
         else { mode = "exact"; r = fs.searchExact(term, cmp); }
         return ok("{\"ok\":true,\"mode\":" + js(mode) + ",\"comparisons\":" + std::to_string(cmp) +
+                  ",\"treeComparisons\":" + std::to_string(treeNodes) +
                   ",\"bstKeys\":" + std::to_string(fs.bst.keys()) + ",\"bstHeight\":" + std::to_string(fs.bst.height()) +
                   ",\"sizeBstKeys\":" + std::to_string(fs.sizeBst.keys()) + ",\"sizeBstHeight\":" + std::to_string(fs.sizeBst.height()) +
                   ",\"sizeBstFiles\":" + std::to_string(fs.sizeBst.totalFiles()) +

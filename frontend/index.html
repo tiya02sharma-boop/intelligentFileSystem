@@ -756,11 +756,26 @@ function resultList(el, items, withPath = true) {
   });
 }
 
+function cmpBanner(summary, treeCmp, bstCmp, bstLabel) {
+  const max = Math.max(1, treeCmp, bstCmp);
+  const ratio = bstCmp > 0 ? (treeCmp / bstCmp).toFixed(1) + '× fewer comparisons' : '0 comparisons';
+  return `<div class="note">${summary}
+    <div style="margin-top:10px;display:grid;gap:4px">
+      <div class="hb"><span class="l" style="width:92px">General Tree</span><span class="tr"><i style="width:${(treeCmp / max * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v" style="width:110px">${treeCmp} cmp (O(n))</span></div>
+      <div class="hb"><span class="l" style="width:92px">${bstLabel}</span><span class="tr"><i style="width:${(bstCmp / max * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v" style="width:110px">${bstCmp} cmp · ${ratio}</span></div>
+    </div>
+  </div>`;
+}
+
 // Name search (BST 1)
 $('#searchBtn').onclick = guard(async () => {
   const q = $('#q').value; if (!q) { toast('Type something to search for', 'err'); return; }
   const d = await api(`/api/search?q=${enc(q)}&mode=${mode}`);
-  $('#searchInfo').innerHTML = `<div class="note"><b>${d.results.length}</b> match${d.results.length === 1 ? '' : 'es'} · Name BST visited <b>${d.comparisons}</b> node${d.comparisons === 1 ? '' : 's'} out of ${d.bstKeys} keys (tree height ${d.bstHeight}). ${d.mode === 'contains' ? 'A substring match must scan every key (O(n)).' : d.mode === 'exact' ? 'Exact search follows a single root-to-leaf path (O(h)).' : 'Prefix search prunes whole subtrees (O(h + k)).'}</div>`;
+  const desc = d.mode === 'contains' ? 'Substring match scans every key (O(n)).' : d.mode === 'exact' ? 'Exact search follows a single root-to-leaf path (O(h)).' : 'Prefix search prunes whole subtrees (O(h + k)).';
+  $('#searchInfo').innerHTML = cmpBanner(
+    `<b>${d.results.length}</b> match${d.results.length === 1 ? '' : 'es'} · Name BST visited <b>${d.comparisons}</b> of ${d.bstKeys} keys (height ${d.bstHeight}) vs <b>${d.treeComparisons}</b> in General Tree DFS. ${desc}`,
+    d.treeComparisons, d.comparisons, 'Name BST'
+  );
   resultList($('#searchRes'), d.results);
 });
 $('#q').onkeydown = e => { if (e.key === 'Enter') $('#searchBtn').click(); };
@@ -778,7 +793,10 @@ $('#sizeRangeBtn').onclick = guard(async () => {
   const min = $('#sqMin').value.trim() || '0';
   const max = $('#sqMax').value.trim() || '1000000000000';
   const d = await api(`/api/search?mode=size_range&min=${enc(min)}&max=${enc(max)}`);
-  $('#sizeInfo').innerHTML = `<div class="note"><b>${d.results.length}</b> file${d.results.length === 1 ? '' : 's'} found in range [${fmtSize(Number(min))}, ${fmtSize(Number(max))}] · Size BST visited <b>${d.comparisons}</b> node${d.comparisons === 1 ? '' : 's'} out of ${d.sizeBstKeys} distinct size keys (${d.sizeBstFiles} indexed files, tree height ${d.sizeBstHeight}).<br><small style="color:var(--muted)">Subtrees outside the range were pruned without scanning. Duplicate sizes were resolved via each node's linked list.</small></div>`;
+  $('#sizeInfo').innerHTML = cmpBanner(
+    `<b>${d.results.length}</b> file${d.results.length === 1 ? '' : 's'} in [${fmtSize(Number(min))}, ${fmtSize(Number(max))}] · Size BST visited <b>${d.comparisons}</b> of ${d.sizeBstKeys} distinct size keys (height ${d.sizeBstHeight}) vs <b>${d.treeComparisons}</b> in General Tree DFS.`,
+    d.treeComparisons, d.comparisons, 'Size BST'
+  );
   resultList($('#sizeRes'), d.results);
 });
 $('#sqMin').onkeydown = e => { if (e.key === 'Enter') $('#sizeRangeBtn').click(); };
@@ -789,7 +807,10 @@ $('#sizeExactBtn').onclick = guard(async () => {
   const sz = $('#sqExact').value.trim();
   if (!sz) { toast('Enter a file size in bytes', 'err'); return; }
   const d = await api(`/api/search?mode=size_exact&size=${enc(sz)}`);
-  $('#sizeInfo').innerHTML = `<div class="note"><b>${d.results.length}</b> file${d.results.length === 1 ? '' : 's'} found with exact size ${fmtSize(Number(sz))} (${sz} bytes) · Size BST visited <b>${d.comparisons}</b> node${d.comparisons === 1 ? '' : 's'} (tree height ${d.sizeBstHeight}). ${d.results.length > 1 ? 'Multiple files with this size were chained in the BST node’s linked list.' : ''}</div>`;
+  $('#sizeInfo').innerHTML = cmpBanner(
+    `<b>${d.results.length}</b> file${d.results.length === 1 ? '' : 's'} with exact size ${fmtSize(Number(sz))} (${sz} B) · Size BST visited <b>${d.comparisons}</b> of ${d.sizeBstKeys} keys (height ${d.sizeBstHeight}) vs <b>${d.treeComparisons}</b> in General Tree DFS.`,
+    d.treeComparisons, d.comparisons, 'Size BST'
+  );
   resultList($('#sizeRes'), d.results);
 });
 $('#sqExact').onkeydown = e => { if (e.key === 'Enter') $('#sizeExactBtn').click(); };
