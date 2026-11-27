@@ -1,5 +1,5 @@
 # ---- Build stage ----
-FROM gcc:13 AS builder
+FROM gcc:12.5.0-bookworm AS builder
 
 WORKDIR /build
 COPY backend/ ./
