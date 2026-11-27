@@ -282,7 +282,7 @@ static Resp api(const std::string& method, const std::string& route, Query& q) {
     }
     if (route == "/api/benchmark") {
         bool sorted = need("sorted") == "1" || need("sorted") == "true";
-        std::vector<size_t> sizes = {100, 500, 1000, 2500, 5000};
+        std::vector<size_t> sizes = {20};
         if (!need("sizes").empty()) {
             std::vector<size_t> parsed;
             std::stringstream ss(need("sizes"));
