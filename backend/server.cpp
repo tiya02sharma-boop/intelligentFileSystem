@@ -439,6 +439,50 @@ static Resp api(const std::string& method, const std::string& route, Query& q) {
         if (!refreshAfterDiskChange(err)) return fail(500, err);
         return ok("{\"ok\":true}");
     }
+    if (route == "/api/import_snapshot") {
+        if (!post) return fail(405, "Use POST for this endpoint");
+        if (g_liveFolder) return fail(403, "Cannot import browser snapshot while running in CLI live folder mode");
+        std::unique_ptr<FileSystem> next(new FileSystem());
+        std::istringstream ss(need("entries"));
+        std::string line;
+        long long count = 0;
+        while (std::getline(ss, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line.empty()) continue;
+            size_t t1 = line.find('\t');
+            size_t t2 = t1 == std::string::npos ? std::string::npos : line.find('\t', t1 + 1);
+            if (t1 == std::string::npos || t2 == std::string::npos) continue;
+            std::string kind = line.substr(0, t1);
+            std::string parent = line.substr(t1 + 1, t2 - t1 - 1);
+            std::string rest = line.substr(t2 + 1);
+            if (kind == "D") {
+                if (next->create(parent, rest, true, 0, err) == 0) ++count;
+            } else if (kind == "F") {
+                size_t t3 = rest.rfind('\t');
+                if (t3 == std::string::npos) continue;
+                std::string name = rest.substr(0, t3);
+                long long sz = 0;
+                try { sz = std::max(0LL, std::stoll(rest.substr(t3 + 1))); } catch (...) { sz = 0; }
+                if (next->create(parent, name, false, sz, err) == 0) ++count;
+            }
+        }
+        delete g_fs;
+        g_fs = next.release();
+        return ok("{\"ok\":true,\"count\":" + std::to_string(count) + "}");
+    }
+    if (route == "/api/update_size") {
+        if (!post) return fail(405, "Use POST for this endpoint");
+        if (g_liveFolder) return fail(403, "Use /api/write in CLI live folder mode");
+        Node* node = fs.resolve(need("path"), err);
+        if (!node) return fail(404, err);
+        if (node->isDir) return fail(400, "Target is a directory");
+        long long sz = 0;
+        try { sz = std::max(0LL, std::stoll(need("size"))); } catch (...) { return fail(400, "Invalid size"); }
+        long long oldSz = node->size;
+        node->size = sz;
+        fs.sizeBst.updateSize(node, oldSz, sz);
+        return ok("{\"ok\":true}");
+    }
     if (route == "/api/traverse") {
         Node* n = fs.resolve(need("path"), err);
         if (!n) return fail(404, err);

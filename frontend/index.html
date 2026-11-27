@@ -230,7 +230,8 @@ h1{color:#fff;text-shadow:0 2px 14px rgba(43,24,80,.35)}
     <button class="nav" data-view="stats"><span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span>Statistics</button>
     <button class="nav" data-view="bench"><span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>Benchmark</button>
     <div class="side-foot">C++ backend<div class="chips"><span class="chip">Tree</span><span class="chip">Linked List</span><span class="chip">2× BST</span></div>
-      <button class="btn ghost" style="margin-top:14px;padding:7px 12px;font-size:12.5px" id="resetBtn">↺ Reset demo data</button></div>
+      <button class="btn ghost" style="margin-top:14px;padding:7px 12px;font-size:12.5px;width:100%;justify-content:center" id="openLocalBtn">📂 Open local folder</button>
+      <button class="btn ghost" style="margin-top:8px;padding:7px 12px;font-size:12.5px;width:100%;justify-content:center" id="resetBtn">↺ Reset demo data</button></div>
   </aside>
 
   <main>
@@ -394,6 +395,8 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 const enc = encodeURIComponent;
 let cwd = '/', expanded = new Set(['/']), dirsCache = [], liveFolderMode = false;
 let liveFolderRevision = 0;
+let browserDirHandle = null;
+const isLocalWritable = () => liveFolderMode || !!browserDirHandle;
 
 /* ---------- helpers */
 async function api(path, post = false, params = null) {
@@ -489,8 +492,8 @@ async function loadExplorer() {
     c.innerHTML = `<div class="acts"><button class="ib ren" title="Rename">${ICON.edit}</button><button class="ib mov" title="Move">${ICON.move}</button><button class="ib del" title="Delete">${ICON.trash}</button></div>
       ${iconFor(n)}<div class="nm">${esc(n.name)}</div>
       <div class="meta">${n.isDir ? `${n.children} item${n.children === 1 ? '' : 's'} · ${fmtSize(n.size)}` : fmtSize(n.size)}</div>`;
-    c.ondblclick = () => n.isDir ? go(n.path) : (liveFolderMode && editFile(n));
-    c.onkeydown = e => { if (e.key === 'Enter') n.isDir ? go(n.path) : (liveFolderMode && editFile(n)); if (e.key === 'Delete') delItem(n); if (e.key === 'F2') renItem(n); };
+    c.ondblclick = () => n.isDir ? go(n.path) : (isLocalWritable() && editFile(n));
+    c.onkeydown = e => { if (e.key === 'Enter') n.isDir ? go(n.path) : (isLocalWritable() && editFile(n)); if (e.key === 'Delete') delItem(n); if (e.key === 'F2') renItem(n); };
     c.querySelector('.ren').onclick = e => { e.stopPropagation(); renItem(n); };
     c.querySelector('.mov').onclick = e => { e.stopPropagation(); movItem(n); };
     c.querySelector('.del').onclick = e => { e.stopPropagation(); delItem(n); };
@@ -559,10 +562,92 @@ async function celebrate(type, name, dir) {
 }
 const BOW = '<svg class="bow" viewBox="0 0 120 70" aria-hidden="true"><path d="M56 44L34 68l18-6 6-18zM64 44l22 24-18-6-6-18z" fill="#1F8F8A"/><path d="M60 40C40 8 6 6 8 30c2 22 36 14 52 10zM60 40C80 8 114 6 112 30c-2 22-36 14-52 10z" fill="#7B4BB5"/><path d="M60 40C44 22 22 20 20 30c-1 10 24 8 40 10zM60 40C76 22 98 20 100 30c1 10-24 8-40 10z" fill="#9B6FD0"/><circle cx="60" cy="40" r="9" fill="#E9C46A"/><circle cx="57" cy="37" r="3" fill="#F6E3A1"/></svg>';
 
+/* ---------- browser File System Access API (Option 1: local folder on deployed site) */
+async function getDirHandle(path) {
+  let h = browserDirHandle;
+  for (const seg of path.split('/').filter(Boolean)) h = await h.getDirectoryHandle(seg);
+  return h;
+}
+async function copyDiskEntry(src, destDir, name) {
+  if (src.kind === 'file') {
+    const file = await src.getFile();
+    const out = await destDir.getFileHandle(name, { create: true });
+    const w = await out.createWritable();
+    await w.write(file);
+    await w.close();
+  } else {
+    const sub = await destDir.getDirectoryHandle(name, { create: true });
+    for await (const [, entry] of src.entries()) await copyDiskEntry(entry, sub, entry.name);
+  }
+}
+async function moveDiskEntry(oldPath, destDirPath, newName, isDir) {
+  const srcParent = await getDirHandle(parentOf(oldPath));
+  const oldName = oldPath.split('/').pop();
+  const destParent = await getDirHandle(destDirPath);
+  const src = isDir ? await srcParent.getDirectoryHandle(oldName) : await srcParent.getFileHandle(oldName);
+  if (typeof src.move === 'function') {
+    await (destDirPath === parentOf(oldPath) ? src.move(newName) : src.move(destParent, newName));
+  } else {
+    await copyDiskEntry(src, destParent, newName);
+    await srcParent.removeEntry(oldName, { recursive: isDir });
+  }
+}
+async function scanBrowserDir(dirHandle, parentPath, lines, state) {
+  if (state.count >= 5000 || state.depth > 16) return;
+  for await (const [, entry] of dirHandle.entries()) {
+    if (state.count >= 5000) break;
+    if (entry.name === '.git' || entry.name === 'node_modules') continue;
+    if (entry.kind === 'directory') {
+      lines.push(`D\t${parentPath}\t${entry.name}`);
+      state.count++;
+      state.depth++;
+      await scanBrowserDir(entry, joinPath(parentPath, entry.name), lines, state);
+      state.depth--;
+    } else {
+      const f = await entry.getFile();
+      lines.push(`F\t${parentPath}\t${entry.name}\t${f.size}`);
+      state.count++;
+    }
+  }
+}
+function updateLocalBanner() {
+  if (browserDirHandle) {
+    $('#sourceNotice').hidden = false;
+    $('#sourceNotice').innerHTML = `<b>Local folder connected · changes save directly to your computer</b><br>Folder: <code>${esc(browserDirHandle.name)}</code> <button class="btn ghost" id="disconnectLocalBtn" style="margin-left:10px;padding:4px 12px;font-size:12px">Disconnect</button>`;
+    $('#disconnectLocalBtn').onclick = guard(async () => {
+      browserDirHandle = null;
+      $('#sourceNotice').hidden = true;
+      await api('/api/reset', true);
+      cwd = '/'; expanded = new Set(['/']);
+      toast('Disconnected local folder; demo data restored');
+      show('explorer');
+    });
+  } else if (!liveFolderMode) {
+    $('#sourceNotice').hidden = true;
+  }
+}
+$('#openLocalBtn').onclick = guard(async () => {
+  if (typeof window.showDirectoryPicker !== 'function') {
+    toast('Your browser does not support File System Access API. Use Chrome or Edge on desktop.', 'err');
+    return;
+  }
+  let handle;
+  try { handle = await window.showDirectoryPicker({ mode: 'readwrite' }); }
+  catch (e) { if (e && e.name === 'AbortError') return; throw e; }
+  const lines = [];
+  await scanBrowserDir(handle, '/', lines, { count: 0, depth: 0 });
+  await api('/api/import_snapshot', true, { entries: lines.join('\n') });
+  browserDirHandle = handle;
+  cwd = '/'; expanded = new Set(['/']);
+  updateLocalBanner();
+  toast(`Connected "${handle.name}" (${lines.length} items)`);
+  show('explorer');
+});
+
 /* ---------- actions */
 async function createItem(type) {
   const fields = [{ id: 'name', label: 'Name', placeholder: type === 'dir' ? 'My Folder' : 'main.cpp' }];
-  if (type === 'file') fields.push(liveFolderMode
+  if (type === 'file') fields.push(isLocalWritable()
     ? { id: 'content', label: 'Initial file contents', multiline: true, placeholder: '// Write your code here' }
     : { id: 'size', label: 'Size (bytes)', type: 'number', value: '1024' });
   const r = await dialog({
@@ -571,20 +656,39 @@ async function createItem(type) {
     ok: 'Create', tone: type === 'dir' ? 'b-teal' : 'b-violet'
   });
   if (!r) return;
-  await api(`/api/create?parent=${enc(cwd)}&name=${enc(r.name)}&type=${type}&size=${enc(r.size || 0)}`, true,
+  let byteSize = r.size || 0;
+  if (browserDirHandle) {
+    const dir = await getDirHandle(cwd);
+    if (type === 'dir') {
+      await dir.getDirectoryHandle(r.name, { create: true });
+    } else {
+      const content = r.content || '';
+      const fh = await dir.getFileHandle(r.name, { create: true });
+      const w = await fh.createWritable();
+      await w.write(content);
+      await w.close();
+      byteSize = new Blob([content]).size;
+    }
+  }
+  await api(`/api/create?parent=${enc(cwd)}&name=${enc(r.name)}&type=${type}&size=${enc(byteSize)}`, true,
     liveFolderMode && type === 'file' ? { content: r.content || '' } : null);
-  toast((type === 'dir' ? 'Folder' : 'File') + ' created', 'ok bow'); await loadExplorer(); celebrate(type, r.name, cwd);
+  toast((type === 'dir' ? 'Folder' : 'File') + ' created' + (browserDirHandle ? ' & saved locally' : ''), 'ok bow'); await loadExplorer(); celebrate(type, r.name, cwd);
 }
 $('#newDir').onclick = guard(() => createItem('dir'));
 $('#newFile').onclick = guard(() => createItem('file'));
 const renItem = guard(async n => {
   const r = await dialog({ title: 'Rename', text: n.path, fields: [{ id: 'name', label: 'New name', value: n.name }], ok: 'Rename', tone: 'b-teal' });
   if (!r) return;
+  if (browserDirHandle && r.name !== n.name) await moveDiskEntry(n.path, parentOf(n.path), r.name, n.isDir);
   await api(`/api/rename?path=${enc(n.path)}&newName=${enc(r.name)}`, true); toast('Renamed'); await loadExplorer();
 });
 const delItem = guard(async n => {
   const r = await dialog({ title: 'Delete ' + (n.isDir ? 'folder' : 'file') + '?', text: n.isDir ? `"${n.name}" and everything inside it (${n.files + n.dirs} items) will be removed.` : `"${n.name}" will be removed.`, ok: 'Delete', tone: 'b-plum' });
   if (!r) return;
+  if (browserDirHandle) {
+    const parentDir = await getDirHandle(parentOf(n.path));
+    await parentDir.removeEntry(n.name, { recursive: n.isDir });
+  }
   const d = await api('/api/delete?path=' + enc(n.path), true); toast(`Deleted ${d.removed} item${d.removed === 1 ? '' : 's'}`); await loadExplorer();
 });
 const movItem = guard(async n => {
@@ -593,18 +697,38 @@ const movItem = guard(async n => {
   if (!opts.length) { toast('No other folder to move into', 'err'); return; }
   const r = await dialog({ title: 'Move', text: 'Move "' + n.name + '" to:', fields: [{ id: 'dest', label: 'Destination folder', options: opts }], ok: 'Move', tone: 'b-violet' });
   if (!r) return;
+  if (browserDirHandle) await moveDiskEntry(n.path, r.dest, n.name, n.isDir);
   await api(`/api/move?path=${enc(n.path)}&dest=${enc(r.dest)}`, true); toast('Moved'); await loadExplorer();
 });
 const editFile = guard(async n => {
-  const file = await api('/api/read?path=' + enc(n.path));
-  const result = await dialog({ title: 'Edit file', text: n.path, fields: [{ id: 'content', label: 'File contents', multiline: true, value: file.content }], ok: 'Save to computer', tone: 'b-teal' });
+  let initialContent = '';
+  if (browserDirHandle) {
+    const dir = await getDirHandle(parentOf(n.path));
+    const fh = await dir.getFileHandle(n.name);
+    const f = await fh.getFile();
+    if (f.size > 1024 * 1024) throw new Error('Only files up to 1 MB can be edited in the website');
+    initialContent = await f.text();
+  } else {
+    const file = await api('/api/read?path=' + enc(n.path));
+    initialContent = file.content;
+  }
+  const result = await dialog({ title: 'Edit file', text: n.path, fields: [{ id: 'content', label: 'File contents', multiline: true, value: initialContent }], ok: 'Save to computer', tone: 'b-teal' });
   if (!result) return;
-  await api('/api/write?path=' + enc(n.path), true, { content: result.content });
+  if (browserDirHandle) {
+    const dir = await getDirHandle(parentOf(n.path));
+    const fh = await dir.getFileHandle(n.name);
+    const w = await fh.createWritable();
+    await w.write(result.content);
+    await w.close();
+    await api(`/api/update_size?path=${enc(n.path)}&size=${new Blob([result.content]).size}`, true);
+  } else {
+    await api('/api/write?path=' + enc(n.path), true, { content: result.content });
+  }
   toast('Saved locally'); await loadExplorer();
 });
 function ctxMenu(e, n) {
   const m = $('#ctx');
-  m.innerHTML = (n.isDir ? '<button data-a="open">Open</button>' : liveFolderMode ? '<button data-a="edit">Edit file</button>' : '') + '<button data-a="ren">Rename</button><button data-a="mov">Move to…</button><button data-a="del">Delete</button>';
+  m.innerHTML = (n.isDir ? '<button data-a="open">Open</button>' : isLocalWritable() ? '<button data-a="edit">Edit file</button>' : '') + '<button data-a="ren">Rename</button><button data-a="mov">Move to…</button><button data-a="del">Delete</button>';
   m.style.display = 'block'; m.style.left = Math.min(e.clientX, innerWidth - 180) + 'px'; m.style.top = Math.min(e.clientY, innerHeight - 160) + 'px';
   m.onclick = ev => { const a = ev.target.dataset.a; m.style.display = 'none'; if (a === 'open') go(n.path); if (a === 'edit') editFile(n); if (a === 'ren') renItem(n); if (a === 'mov') movItem(n); if (a === 'del') delItem(n); };
 }
@@ -612,7 +736,7 @@ addEventListener('click', () => $('#ctx').style.display = 'none');
 addEventListener('scroll', () => $('#ctx').style.display = 'none', true);
 $('#resetBtn').onclick = guard(async () => {
   const r = await dialog({ title: 'Reset demo data?', text: 'Everything will be replaced by the sample file system.', ok: 'Reset', tone: 'b-silver' });
-  if (!r) return; await api('/api/reset', true); cwd = '/'; expanded = new Set(['/']); toast('Demo data restored'); show('explorer');
+  if (!r) return; browserDirHandle = null; updateLocalBanner(); await api('/api/reset', true); cwd = '/'; expanded = new Set(['/']); toast('Demo data restored'); show('explorer');
 });
 
 /* ---------- search */
@@ -793,7 +917,7 @@ $('#benchRunBtn').onclick = guard(runScalingBench);
       $('#sourceNotice').hidden = false;
       $('#sourceNotice').innerHTML = `<b>Live local folder · changes save to your computer</b><br>${esc(modeInfo.sourceRoot)}<br>Create files and folders here, edit text files, or rename, move, and delete items. Changes are written inside this folder; symbolic links are skipped.`;
       $('#resetBtn').style.display = 'none';
-      $('#resetBtn').style.display = 'none';
+      $('#openLocalBtn').style.display = 'none';
       document.querySelector('#view-explorer .sub').textContent = 'Browse, search and analyze this folder. Changes made on your computer appear automatically.';
     }
     await loadExplorer();
