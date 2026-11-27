@@ -17,3 +17,6 @@ backend/*.dSYM/
 # Build artifacts
 *.out
 a.out
+
+# Local filesystem data used by the live-folder mode
+.filesystem-data/
