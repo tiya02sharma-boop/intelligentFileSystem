@@ -343,9 +343,42 @@ h1{color:#fff;text-shadow:0 2px 14px rgba(43,24,80,.35)}
 
     <!-- ================= BENCHMARK ================= -->
     <section class="view" id="view-bench">
-      <h1>Sample Benchmark: General Tree vs BST</h1>
-      <p class="sub">This benchmark uses generated sample data to show how search comparisons and time change as the dataset grows. It does not search or modify your current files.</p>
+      <h1>Benchmark: General Tree vs BST</h1>
+      <p class="sub">Compare Name Search and Size Search between the General Tree (DFS scan) and the BST indexes on your current filesystem, plus a sample scaling run (N = 20).</p>
       <div class="bench-stack">
+        <div class="panel">
+          <div class="bench-panel-head">
+            <h3>Name Search Comparison (General Tree vs Name BST)</h3>
+            <span class="hint" style="color:var(--muted)">Runs 200 iterations on your current filesystem</span>
+          </div>
+          <div class="toolbar" style="margin-bottom:12px">
+            <div class="field" style="margin:0;flex:1;min-width:200px"><label for="raceQ">Exact file or folder name</label><input id="raceQ" type="text" placeholder="e.g. Resume.pdf, tree.cpp, song1.mp3" autocomplete="off"></div>
+            <button class="btn b-teal" id="raceBtn">Compare Name Search</button>
+          </div>
+          <div id="raceInfo" aria-live="polite"></div>
+          <div id="raceBars"></div>
+          <div class="list" id="raceRes" style="margin-top:14px"></div>
+        </div>
+
+        <div class="panel">
+          <div class="bench-panel-head">
+            <h3>Size Search Comparison (General Tree vs Size BST)</h3>
+            <span class="hint" style="color:var(--muted)">Runs 200 iterations on your current filesystem</span>
+          </div>
+          <div class="row" style="margin-bottom:12px">
+            <div class="field" style="margin:0;flex:1;min-width:140px"><label for="raceSzExact">Exact size (bytes)</label><input id="raceSzExact" type="number" min="0" placeholder="e.g. 182400"></div>
+            <button class="btn b-teal" id="raceSzExactBtn">Compare Exact Size</button>
+          </div>
+          <div class="row" style="margin-bottom:12px">
+            <div class="field" style="margin:0;flex:1;min-width:120px"><label for="raceSzMin">Min size (bytes)</label><input id="raceSzMin" type="number" min="0" placeholder="0"></div>
+            <div class="field" style="margin:0;flex:1;min-width:120px"><label for="raceSzMax">Max size (bytes)</label><input id="raceSzMax" type="number" min="0" placeholder="500000"></div>
+            <button class="btn b-violet" id="raceSzRangeBtn">Compare Size Range</button>
+          </div>
+          <div id="raceSzInfo" aria-live="polite"></div>
+          <div id="raceSzBars"></div>
+          <div class="list" id="raceSzRes" style="margin-top:14px"></div>
+        </div>
+
         <div class="panel">
           <div class="bench-panel-head">
             <h3>Scaling benchmark (N = 20 items)</h3>
@@ -744,26 +777,11 @@ function resultList(el, items, withPath = true) {
   });
 }
 
-function cmpBanner(summary, treeCmp, bstCmp, bstLabel) {
-  const max = Math.max(1, treeCmp, bstCmp);
-  const ratio = bstCmp > 0 ? (treeCmp / bstCmp).toFixed(1) + '× fewer comparisons' : '0 comparisons';
-  return `<div class="note">${summary}
-    <div style="margin-top:10px;display:grid;gap:4px">
-      <div class="hb"><span class="l" style="width:92px">General Tree</span><span class="tr"><i style="width:${(treeCmp / max * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v" style="width:110px">${treeCmp} cmp (O(n))</span></div>
-      <div class="hb"><span class="l" style="width:92px">${bstLabel}</span><span class="tr"><i style="width:${(bstCmp / max * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v" style="width:110px">${bstCmp} cmp · ${ratio}</span></div>
-    </div>
-  </div>`;
-}
-
 // Name search (BST 1)
 $('#searchBtn').onclick = guard(async () => {
   const q = $('#q').value; if (!q) { toast('Type something to search for', 'err'); return; }
   const d = await api(`/api/search?q=${enc(q)}&mode=${mode}`);
-  const desc = d.mode === 'contains' ? 'Substring match scans every key (O(n)).' : d.mode === 'exact' ? 'Exact search follows a single root-to-leaf path (O(h)).' : 'Prefix search prunes whole subtrees (O(h + k)).';
-  $('#searchInfo').innerHTML = cmpBanner(
-    `<b>${d.results.length}</b> match${d.results.length === 1 ? '' : 'es'} · Name BST visited <b>${d.comparisons}</b> of ${d.bstKeys} keys (height ${d.bstHeight}) vs <b>${d.treeComparisons}</b> in General Tree DFS. ${desc}`,
-    d.treeComparisons, d.comparisons, 'Name BST'
-  );
+  $('#searchInfo').innerHTML = `<div class="note"><b>${d.results.length}</b> match${d.results.length === 1 ? '' : 'es'} · Name BST visited <b>${d.comparisons}</b> node${d.comparisons === 1 ? '' : 's'} out of ${d.bstKeys} keys (tree height ${d.bstHeight}). ${d.mode === 'contains' ? 'A substring match must scan every key (O(n)).' : d.mode === 'exact' ? 'Exact search follows a single root-to-leaf path (O(h)).' : 'Prefix search prunes whole subtrees (O(h + k)).'}</div>`;
   resultList($('#searchRes'), d.results);
 });
 $('#q').onkeydown = e => { if (e.key === 'Enter') $('#searchBtn').click(); };
@@ -781,10 +799,7 @@ $('#sizeRangeBtn').onclick = guard(async () => {
   const min = $('#sqMin').value.trim() || '0';
   const max = $('#sqMax').value.trim() || '1000000000000';
   const d = await api(`/api/search?mode=size_range&min=${enc(min)}&max=${enc(max)}`);
-  $('#sizeInfo').innerHTML = cmpBanner(
-    `<b>${d.results.length}</b> file${d.results.length === 1 ? '' : 's'} in [${fmtSize(Number(min))}, ${fmtSize(Number(max))}] · Size BST visited <b>${d.comparisons}</b> of ${d.sizeBstKeys} distinct size keys (height ${d.sizeBstHeight}) vs <b>${d.treeComparisons}</b> in General Tree DFS.`,
-    d.treeComparisons, d.comparisons, 'Size BST'
-  );
+  $('#sizeInfo').innerHTML = `<div class="note"><b>${d.results.length}</b> file${d.results.length === 1 ? '' : 's'} found in range [${fmtSize(Number(min))}, ${fmtSize(Number(max))}] · Size BST visited <b>${d.comparisons}</b> node${d.comparisons === 1 ? '' : 's'} out of ${d.sizeBstKeys} distinct size keys (${d.sizeBstFiles} indexed files, tree height ${d.sizeBstHeight}).<br><small style="color:var(--muted)">Subtrees outside the range were pruned without scanning. Duplicate sizes were resolved via each node's linked list.</small></div>`;
   resultList($('#sizeRes'), d.results);
 });
 $('#sqMin').onkeydown = e => { if (e.key === 'Enter') $('#sizeRangeBtn').click(); };
@@ -795,10 +810,7 @@ $('#sizeExactBtn').onclick = guard(async () => {
   const sz = $('#sqExact').value.trim();
   if (!sz) { toast('Enter a file size in bytes', 'err'); return; }
   const d = await api(`/api/search?mode=size_exact&size=${enc(sz)}`);
-  $('#sizeInfo').innerHTML = cmpBanner(
-    `<b>${d.results.length}</b> file${d.results.length === 1 ? '' : 's'} with exact size ${fmtSize(Number(sz))} (${sz} B) · Size BST visited <b>${d.comparisons}</b> of ${d.sizeBstKeys} keys (height ${d.sizeBstHeight}) vs <b>${d.treeComparisons}</b> in General Tree DFS.`,
-    d.treeComparisons, d.comparisons, 'Size BST'
-  );
+  $('#sizeInfo').innerHTML = `<div class="note"><b>${d.results.length}</b> file${d.results.length === 1 ? '' : 's'} found with exact size ${fmtSize(Number(sz))} (${sz} bytes) · Size BST visited <b>${d.comparisons}</b> node${d.comparisons === 1 ? '' : 's'} (tree height ${d.sizeBstHeight}). ${d.results.length > 1 ? 'Multiple files with this size were chained in the BST node’s linked list.' : ''}</div>`;
   resultList($('#sizeRes'), d.results);
 });
 $('#sqExact').onkeydown = e => { if (e.key === 'Enter') $('#sizeExactBtn').click(); };
@@ -855,6 +867,70 @@ $$('#benchOrderSeg button').forEach(btn => {
     $$('#benchOrderSeg button').forEach(b => b.classList.toggle('on', b === btn));
   };
 });
+
+function renderRaceBars(el, d, bstLabel) {
+  const maxCmp = Math.max(1, d.treeCmp, d.bstCmp);
+  const maxUs = Math.max(0.01, d.treeUs, d.bstUs);
+  el.innerHTML = `<div class="two">
+    <div class="chart"><h4>Comparisons per search</h4><div class="leg"><span class="a">General Tree</span><span class="b">${bstLabel}</span></div>
+      <div class="hb"><span class="l">Tree</span><span class="tr"><i style="width:${(d.treeCmp / maxCmp * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v">${d.treeCmp}</span></div>
+      <div class="hb"><span class="l">BST</span><span class="tr"><i style="width:${(d.bstCmp / maxCmp * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v">${d.bstCmp}</span></div></div>
+    <div class="chart"><h4>Average latency (µs)</h4><div class="leg"><span class="a">General Tree</span><span class="b">${bstLabel}</span></div>
+      <div class="hb"><span class="l">Tree</span><span class="tr"><i style="width:${(d.treeUs / maxUs * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v">${d.treeUs.toFixed(2)} µs</span></div>
+      <div class="hb"><span class="l">BST</span><span class="tr"><i style="width:${(d.bstUs / maxUs * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v">${d.bstUs.toFixed(2)} µs</span></div></div>
+  </div>`;
+}
+
+async function runNameRace() {
+  const q = $('#raceQ').value.trim();
+  if (!q) return toast('Enter an exact file or folder name', 'err');
+  const btn = $('#raceBtn');
+  btn.disabled = true; btn.textContent = 'Comparing…';
+  try {
+    const d = await api('/api/race?q=' + enc(q));
+    const cmpRatio = d.bstCmp > 0 ? (d.treeCmp / d.bstCmp).toFixed(1) : '—';
+    const timeRatio = d.bstUs > 0.01 ? (d.treeUs / d.bstUs).toFixed(1) : '—';
+    $('#raceInfo').innerHTML = `<div class="note"><b>${d.matches}</b> result${d.matches === 1 ? '' : 's'} for <code>${esc(d.query)}</code> · General Tree DFS visited <b>${d.treeCmp}</b> of ${d.totalNodes} nodes (${d.treeUs.toFixed(2)} µs); Name BST visited <b>${d.bstCmp}</b> of ${d.bstKeys} keys, height ${d.bstHeight} (${d.bstUs.toFixed(2)} µs) — <b>${cmpRatio}×</b> fewer comparisons, <b>${timeRatio}×</b> faster.</div>`;
+    renderRaceBars($('#raceBars'), d, 'Name BST');
+    resultList($('#raceRes'), d.results || []);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Compare Name Search';
+  }
+}
+$('#raceBtn').onclick = guard(runNameRace);
+$('#raceQ').onkeydown = e => { if (e.key === 'Enter') $('#raceBtn').click(); };
+
+async function runSizeRace(modeKind) {
+  const btn = modeKind === 'range' ? $('#raceSzRangeBtn') : $('#raceSzExactBtn');
+  const orig = btn.textContent;
+  let url = '/api/race_size?mode=' + modeKind;
+  if (modeKind === 'exact') {
+    const sz = $('#raceSzExact').value.trim();
+    if (!sz) return toast('Enter a file size in bytes', 'err');
+    url += '&size=' + enc(sz);
+  } else {
+    const min = $('#raceSzMin').value.trim() || '0';
+    const max = $('#raceSzMax').value.trim() || '1000000000000';
+    url += `&min=${enc(min)}&max=${enc(max)}`;
+  }
+  btn.disabled = true; btn.textContent = 'Comparing…';
+  try {
+    const d = await api(url);
+    const cmpRatio = d.bstCmp > 0 ? (d.treeCmp / d.bstCmp).toFixed(1) : '—';
+    const timeRatio = d.bstUs > 0.01 ? (d.treeUs / d.bstUs).toFixed(1) : '—';
+    const label = d.mode === 'range' ? `[${fmtSize(d.minSize)}, ${fmtSize(d.maxSize)}]` : `${fmtSize(d.size)} (${d.size} B)`;
+    $('#raceSzInfo').innerHTML = `<div class="note"><b>${d.matches}</b> file${d.matches === 1 ? '' : 's'} for ${label} · General Tree DFS visited <b>${d.treeCmp}</b> of ${d.totalNodes} nodes (${d.treeUs.toFixed(2)} µs); Size BST visited <b>${d.bstCmp}</b> of ${d.sizeBstKeys} keys, height ${d.sizeBstHeight} (${d.bstUs.toFixed(2)} µs) — <b>${cmpRatio}×</b> fewer comparisons, <b>${timeRatio}×</b> faster.</div>`;
+    renderRaceBars($('#raceSzBars'), d, 'Size BST');
+    resultList($('#raceSzRes'), d.results || []);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+$('#raceSzExactBtn').onclick = guard(() => runSizeRace('exact'));
+$('#raceSzRangeBtn').onclick = guard(() => runSizeRace('range'));
+$('#raceSzExact').onkeydown = e => { if (e.key === 'Enter') $('#raceSzExactBtn').click(); };
+$('#raceSzMin').onkeydown = e => { if (e.key === 'Enter') $('#raceSzRangeBtn').click(); };
+$('#raceSzMax').onkeydown = e => { if (e.key === 'Enter') $('#raceSzRangeBtn').click(); };
 
 
 async function runScalingBench() {

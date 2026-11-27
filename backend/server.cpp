@@ -353,6 +353,97 @@ static Resp api(const std::string& method, const std::string& route, Query& q) {
           << ",\"results\":" << listJson(bstRes) << "}";
         return ok(o.str());
     }
+    if (route == "/api/race_size") {
+        std::string mode = need("mode");
+        using clk = std::chrono::steady_clock;
+        const int iters = 200;
+        long long treeCmp = 0, bstCmp = 0;
+        std::vector<const Node*> bstRes;
+        auto treeScanSize = [&](auto pred, long long& cmp) {
+            std::function<void(const Node*)> dfs = [&](const Node* n) {
+                for (const Node* c = n->firstChild; c; c = c->next) {
+                    ++cmp;
+                    if (!c->isDir && pred(c->size)) {}
+                    if (c->isDir) dfs(c);
+                }
+            };
+            dfs(fs.root);
+        };
+        if (mode == "range") {
+            long long minSize = 0, maxSize = 1000000000000000LL;
+            try {
+                if (!need("min").empty()) minSize = std::stoll(need("min"));
+                if (!need("max").empty()) maxSize = std::stoll(need("max"));
+            } catch (...) { return fail(400, "Min and max sizes must be valid integers"); }
+            if (minSize < 0) minSize = 0;
+            if (maxSize < minSize) return fail(400, "Max size cannot be less than min size");
+            auto t0 = clk::now();
+            for (int i = 0; i < iters; ++i) {
+                treeCmp = 0;
+                treeScanSize([&](long long s) { return s >= minSize && s <= maxSize; }, treeCmp);
+            }
+            auto t1 = clk::now();
+            double treeUs = std::chrono::duration<double, std::micro>(t1 - t0).count() / iters;
+
+            t0 = clk::now();
+            for (int i = 0; i < iters; ++i) {
+                bstCmp = 0;
+                bstRes = fs.searchSizeRange(minSize, maxSize, bstCmp);
+            }
+            t1 = clk::now();
+            double bstUs = std::chrono::duration<double, std::micro>(t1 - t0).count() / iters;
+
+            Stats st = fs.stats(fs.root);
+            std::ostringstream o;
+            o << std::fixed << std::setprecision(2);
+            o << "{\"ok\":true,\"mode\":\"range\",\"minSize\":" << minSize << ",\"maxSize\":" << maxSize
+              << ",\"matches\":" << bstRes.size()
+              << ",\"totalNodes\":" << (st.files + st.dirs)
+              << ",\"sizeBstKeys\":" << fs.sizeBst.keys()
+              << ",\"sizeBstHeight\":" << fs.sizeBst.height()
+              << ",\"treeCmp\":" << treeCmp
+              << ",\"bstCmp\":" << bstCmp
+              << ",\"treeUs\":" << treeUs
+              << ",\"bstUs\":" << bstUs
+              << ",\"results\":" << listJson(bstRes) << "}";
+            return ok(o.str());
+        } else {
+            long long sz = 0;
+            std::string qval = need("size");
+            if (qval.empty()) return fail(400, "Size value cannot be empty");
+            try { sz = std::stoll(qval); } catch (...) { return fail(400, "Size must be a valid integer"); }
+            auto t0 = clk::now();
+            for (int i = 0; i < iters; ++i) {
+                treeCmp = 0;
+                treeScanSize([&](long long s) { return s == sz; }, treeCmp);
+            }
+            auto t1 = clk::now();
+            double treeUs = std::chrono::duration<double, std::micro>(t1 - t0).count() / iters;
+
+            t0 = clk::now();
+            for (int i = 0; i < iters; ++i) {
+                bstCmp = 0;
+                bstRes = fs.searchExactSize(sz, bstCmp);
+            }
+            t1 = clk::now();
+            double bstUs = std::chrono::duration<double, std::micro>(t1 - t0).count() / iters;
+
+            Stats st = fs.stats(fs.root);
+            std::ostringstream o;
+            o << std::fixed << std::setprecision(2);
+            o << "{\"ok\":true,\"mode\":\"exact\",\"size\":" << sz
+              << ",\"matches\":" << bstRes.size()
+              << ",\"totalNodes\":" << (st.files + st.dirs)
+              << ",\"sizeBstKeys\":" << fs.sizeBst.keys()
+              << ",\"sizeBstHeight\":" << fs.sizeBst.height()
+              << ",\"treeCmp\":" << treeCmp
+              << ",\"bstCmp\":" << bstCmp
+              << ",\"treeUs\":" << treeUs
+              << ",\"bstUs\":" << bstUs
+              << ",\"results\":" << listJson(bstRes) << "}";
+            return ok(o.str());
+        }
+    }
     if (route == "/api/search") {
         std::string mode = need("mode");
         Stats treeSt = fs.stats(fs.root);
