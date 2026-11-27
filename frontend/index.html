@@ -198,6 +198,21 @@ h1{color:#fff;text-shadow:0 2px 14px rgba(43,24,80,.35)}
 .mini i{width:14px;height:2px;background:var(--lilac)}
 .mini .new{background:linear-gradient(135deg,#27A59E,#7B4BB5);color:#fff;animation:pop .6s cubic-bezier(.3,1.6,.5,1) .3s backwards;box-shadow:0 0 0 3px rgba(233,196,106,.6)}
 .gift .row{justify-content:center;margin-top:16px}
+/* General Tree vs BST benchmark */
+.bench-stack{display:flex;flex-direction:column;gap:16px}
+.bench-panel-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.bench-panel-head h3{margin:0}
+.seg-sm{display:inline-flex;background:#fff;border-radius:99px;padding:3px;border:1px solid var(--line)}
+.seg-sm button{border:0;background:transparent;padding:6px 13px;border-radius:99px;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--muted)}
+.seg-sm button.on{background:var(--violet);color:#fff}
+.table-wrapper{overflow:auto;max-width:100%;max-height:min(460px,70vh);border-radius:12px}
+.bench-tbl{width:100%;border-collapse:separate;border-spacing:0 6px;font-variant-numeric:tabular-nums}
+.bench-tbl caption{text-align:left;font-size:12.5px;color:var(--muted);margin-bottom:8px;font-weight:600}
+.bench-tbl th{font-size:12.5px;font-weight:600;color:var(--muted);text-align:left;padding:8px 12px;white-space:nowrap}
+.bench-tbl td{padding:10px 12px;background:var(--teal-s);white-space:nowrap}
+.bench-tbl tbody th{padding:10px 12px;background:var(--teal-s);color:var(--violet-d);font-weight:700;border-radius:12px 0 0 12px}
+.bench-tbl tbody tr:nth-child(even) td,.bench-tbl tbody tr:nth-child(even) th{background:var(--violet-s)}
+.bench-tbl td:last-child{border-radius:0 12px 12px 0}
 </style>
 </head>
 <body>
@@ -239,8 +254,6 @@ h1{color:#fff;text-shadow:0 2px 14px rgba(43,24,80,.35)}
         </div>
       </div>
     </section>
-  </main>
-</div>
 
     <!-- ================= NAME SEARCH ================= -->
     <section class="view" id="view-search">
@@ -263,8 +276,6 @@ h1{color:#fff;text-shadow:0 2px 14px rgba(43,24,80,.35)}
       <div id="searchInfo"></div>
       <div class="list" id="searchRes"></div>
     </section>
-  </main>
-</div>
 
     <!-- ================= SIZE SEARCH ================= -->
     <section class="view" id="view-size">
@@ -300,8 +311,6 @@ h1{color:#fff;text-shadow:0 2px 14px rgba(43,24,80,.35)}
       <div id="sizeInfo"></div>
       <div class="list" id="sizeRes"></div>
     </section>
-  </main>
-</div>
 
     <!-- ================= TRAVERSE ================= -->
     <section class="view" id="view-traverse">
@@ -322,8 +331,6 @@ h1{color:#fff;text-shadow:0 2px 14px rgba(43,24,80,.35)}
       <div id="tinfo"></div>
       <div class="list" id="tres"></div>
     </section>
-  </main>
-</div>
 
     <!-- ================= STATS ================= -->
     <section class="view" id="view-stats">
@@ -332,54 +339,47 @@ h1{color:#fff;text-shadow:0 2px 14px rgba(43,24,80,.35)}
       <div class="stats" id="stStats"></div>
       <div class="panel"><h3>Immediate children — share of subtree size</h3><table class="tbl" id="stTbl"></table></div>
     </section>
-  </main>
-</div>
 
     <!-- ================= BENCHMARK ================= -->
     <section class="view" id="view-bench">
-      <h1>Benchmark</h1>
-      <p class="sub">Run timed operations on a fresh temporary file system to compare data structure performance. Results come from the C++ backend — real clock measurements, not estimates.</p>
-
-      <div class="panel" style="margin-bottom:18px">
-        <div class="row" style="align-items:flex-end;gap:16px;flex-wrap:wrap">
-          <div class="field" style="flex:0 0 220px;margin:0">
-            <label>Number of operations (10–5000)</label>
-            <input type="number" id="benchN" min="10" max="5000" value="500" placeholder="500">
+      <h1>Benchmark: General Tree vs BST</h1>
+      <p class="sub">Compare exact-name search through the directory tree with the indexed Name BST. The live race uses your current filesystem; the scaling run builds temporary datasets.</p>
+      <div class="bench-stack">
+        <div class="panel">
+          <div class="bench-panel-head">
+            <h3>Live search comparison</h3>
+            <span class="hint" style="color:var(--muted)">200 repeated searches, measured by the C++ backend</span>
           </div>
-          <button class="btn b-violet" id="benchBtn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            Run Benchmark
-          </button>
-          <span class="hint" id="benchHint">Benchmarks run in a temporary copy — your file system is unaffected.</span>
-        </div>
-      </div>
-
-      <div id="benchResults" style="display:none">
-        <!-- stat cards row -->
-        <div class="stats" id="benchCards"></div>
-
-        <!-- timing table -->
-        <div class="panel" style="margin-bottom:18px">
-          <h3 style="margin-bottom:14px">Operation Timings</h3>
-          <table class="tbl" id="benchTbl">
-            <tr><th>Operation</th><th>Structure</th><th>Total time</th><th>Per op</th><th style="width:34%">Relative speed</th></tr>
-          </table>
-        </div>
-
-        <!-- comparison bar charts -->
-        <div class="two">
-          <div class="panel chart">
-            <h4>Name BST — avg comparisons per exact search</h4>
-            <div id="benchCmpName"></div>
+          <div class="toolbar" style="margin-bottom:12px">
+            <div class="field" style="margin:0;flex:1;min-width:200px"><label for="raceQ">Exact file or folder name</label><input id="raceQ" type="text" placeholder="e.g. resume.pdf" autocomplete="off"></div>
+            <button class="btn b-teal" id="raceBtn">Compare Search</button>
           </div>
-          <div class="panel chart">
-            <h4>Size BST — avg nodes visited per range query</h4>
-            <div id="benchCmpSize"></div>
+          <div id="raceInfo" aria-live="polite"></div>
+          <div id="raceBars"></div>
+        </div>
+        <div class="panel">
+          <div class="bench-panel-head">
+            <h3>Scaling benchmark</h3>
+            <div class="toolbar" style="margin:0">
+              <div class="seg-sm" id="benchOrderSeg" role="group" aria-label="BST insertion order">
+                <button type="button" data-sorted="0" class="on">Random input</button>
+                <button type="button" data-sorted="1">Sorted input</button>
+              </div>
+              <button class="btn b-violet" id="benchRunBtn">Run Benchmark</button>
+            </div>
+          </div>
+          <p class="hint" style="color:var(--muted);margin-bottom:12px">Measures repeated successful searches from 100 to 5,000 indexed names. Sorted input shows how an unbalanced BST can degrade.</p>
+          <div id="benchNote"></div>
+          <div class="stats" id="benchStats"></div>
+          <div class="two" id="benchCharts" style="margin-bottom:16px"></div>
+          <div tabindex="0" role="region" aria-labelledby="bench-table-caption" class="table-wrapper">
+            <table class="bench-tbl" id="benchTbl">
+              <caption id="bench-table-caption">General Tree DFS vs Name BST search performance by dataset size</caption>
+              <thead><tr><th>Items (N)</th><th>General Tree (ms)</th><th>Name BST (ms)</th><th>Tree avg comparisons</th><th>BST avg comparisons</th><th>BST height</th><th>Speedup</th></tr></thead>
+              <tbody id="benchTbody"><tr><td colspan="7" class="hint" style="color:var(--muted)">Run the benchmark to compare both search methods.</td></tr></tbody>
+            </table>
           </div>
         </div>
-
-        <!-- insight note -->
-        <div class="note" id="benchNote" style="margin-top:18px"></div>
       </div>
     </section>
   </main>
@@ -714,88 +714,74 @@ async function loadStats() {
 }
 $('#sstart').onchange = guard(loadStats);
 
-/* ---------- benchmark */
-function benchBar(val, max, color = 'var(--teal)') {
-  const pct = max > 0 ? Math.min(100, val / max * 100).toFixed(1) : 0;
-  return `<div class="bar" style="min-width:120px"><i style="width:${pct}%;background:${color}"></i></div>`;
-}
-
-$('#benchBtn').onclick = guard(async () => {
-  const n = parseInt($('#benchN').value) || 500;
-  const btn = $('#benchBtn');
-  btn.disabled = true;
-  $('#benchHint').textContent = 'Running…';
-  try {
-    const d = await api(`/api/benchmark?n=${n}`);
-    btn.disabled = false;
-    $('#benchHint').textContent = `Completed with n = ${d.n} operations.`;
-    $('#benchResults').style.display = '';
-
-    // Stat cards
-    statCards($('#benchCards'), [
-      ['Name BST keys', d.nameBstKeys, 'live FS'],
-      ['Name BST height', d.nameBstHeight, 'live FS'],
-      ['Size BST keys', d.sizeBstKeys, 'live FS'],
-      ['Size BST height', d.sizeBstHeight, 'live FS'],
-    ]);
-
-    // Timing table
-    const rows = [
-      ['Insert × ' + d.n,       'Name BST',  d.bstInsertUs,      d.bstInsertUs / d.n],
-      ['Exact search × ' + d.n, 'Name BST',  d.bstSearchUs,      d.bstSearchUs / d.n],
-      ['Delete × ' + d.n,       'Name BST',  d.bstDeleteUs,      d.bstDeleteUs / d.n],
-      ['Range query × ' + Math.round(d.n / 5), 'Size BST', d.sizeBstRangeUs, d.sizeBstRangeUs / Math.round(d.n / 5)],
-      ['Sequential scan × 1',   'Linked List', d.llScanUs,        d.llScanUs],
-    ];
-    const maxUs = Math.max(...rows.map(r => r[2]));
-    const fmtUs = v => v < 1000 ? v.toFixed(1) + ' µs' : (v / 1000).toFixed(2) + ' ms';
-    const colors = ['var(--teal)', 'var(--teal)', 'var(--teal-d)', 'var(--violet)', 'var(--plum)'];
-    $('#benchTbl').innerHTML = `<tr><th>Operation</th><th>Structure</th><th>Total time</th><th>Per op</th><th style="width:34%">Relative speed</th></tr>` +
-      rows.map((r, i) => `<tr>
-        <td><b>${esc(r[0])}</b></td>
-        <td><span class="pill i${i % 4 + 1}">${esc(r[1])}</span></td>
-        <td>${fmtUs(r[2])}</td>
-        <td>${r[3].toFixed(2)} µs</td>
-        <td>${benchBar(r[2], maxUs, colors[i])}</td>
-      </tr>`).join('');
-
-    // Comparison bar charts
-    const log2 = x => x > 0 ? Math.log2(x) : 0;
-    const theoreticalH = log2(d.n);
-    const cmpBars = (actual, theoretical, label) => `
-      <div class="grp">
-        <div class="hb">
-          <span class="l">Actual</span>
-          <div class="tr"><i style="width:${Math.min(100, actual / (theoretical * 2) * 100).toFixed(1)}%;background:var(--teal)"></i></div>
-          <span class="v">${actual.toFixed(1)} nodes</span>
-        </div>
-        <div class="hb">
-          <span class="l">O(log n)</span>
-          <div class="tr"><i style="width:${Math.min(100, theoretical / (theoretical * 2) * 100).toFixed(1)}%;background:var(--violet)"></i></div>
-          <span class="v">${theoretical.toFixed(1)} nodes</span>
-        </div>
-      </div>
-      <div class="leg"><span class="a">Actual avg</span><span class="b">Ideal O(log n)</span></div>`;
-    $('#benchCmpName').innerHTML = cmpBars(d.avgCmpName, theoreticalH, 'NameBST');
-    $('#benchCmpSize').innerHTML = cmpBars(d.avgCmpSize, theoreticalH, 'SizeBST');
-
-    // Insight note
-    const llEfficiency = d.n > 0 ? (d.llNodes / d.n * 100).toFixed(0) : 0;
-    const bstEff = d.avgCmpName <= theoreticalH * 1.5 ? 'well-balanced (close to O(log n))' : 'slightly unbalanced';
-    $('#benchNote').innerHTML = `<b>Key takeaways</b> from this run:<br>
-      · Name BST insert of <b>${d.n}</b> names took <b>${(d.bstInsertUs/1000).toFixed(2)} ms</b> total — 
-        <b>${(d.bstInsertUs/d.n).toFixed(1)} µs</b> per insert.<br>
-      · Exact search averaged <b>${d.avgCmpName.toFixed(1)}</b> comparisons — BST is ${bstEff} 
-        (ideal log₂(${d.n}) ≈ ${theoreticalH.toFixed(1)}).<br>
-      · Size BST range query pruned branches outside [min, max]; avg nodes visited: <b>${d.avgCmpSize.toFixed(1)}</b>.<br>
-      · Linked-list sequential scan of <b>${d.llNodes}</b> children took <b>${d.llScanUs.toFixed(1)} µs</b> 
-        — O(n) but fast due to cache locality.`;
-  } catch (e) {
-    btn.disabled = false;
-    $('#benchHint').textContent = 'Benchmark failed — is the server running?';
-    throw e;
-  }
+/* ---------- General Tree vs BST benchmark */
+let benchSorted = 0;
+$$('#benchOrderSeg button').forEach(btn => {
+  btn.onclick = () => {
+    benchSorted = Number(btn.dataset.sorted);
+    $$('#benchOrderSeg button').forEach(b => b.classList.toggle('on', b === btn));
+  };
 });
+
+async function runRace() {
+  const q = $('#raceQ').value.trim();
+  if (!q) return toast('Enter an exact file or folder name', 'err');
+  const btn = $('#raceBtn');
+  btn.disabled = true;
+  btn.textContent = 'Comparing…';
+  try {
+    const d = await api('/api/race?q=' + enc(q));
+    const cmpRatio = d.bstCmp > 0 ? (d.treeCmp / d.bstCmp).toFixed(1) : '—';
+    const timeRatio = d.bstUs > 0.01 ? (d.treeUs / d.bstUs).toFixed(1) : '—';
+    $('#raceInfo').innerHTML = `<div class="note"><b>${d.matches}</b> result${d.matches === 1 ? '' : 's'} for <code>${esc(d.query)}</code>. General Tree DFS visited <b>${d.treeCmp}</b> of ${d.totalNodes} total nodes (${d.treeUs.toFixed(2)} µs average); Name BST visited <b>${d.bstCmp}</b> of ${d.bstKeys} name keys, with height ${d.bstHeight} (${d.bstUs.toFixed(2)} µs average). Tree/BST ratios: <b>${cmpRatio}×</b> comparisons and <b>${timeRatio}×</b> time.</div>`;
+    const maxCmp = Math.max(1, d.treeCmp, d.bstCmp);
+    const maxUs = Math.max(0.01, d.treeUs, d.bstUs);
+    $('#raceBars').innerHTML = `<div class="two">
+      <div class="chart"><h4>Comparisons per search</h4><div class="leg"><span class="a">General Tree</span><span class="b">Name BST</span></div>
+        <div class="hb"><span class="l">Tree</span><span class="tr"><i style="width:${(d.treeCmp / maxCmp * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v">${d.treeCmp}</span></div>
+        <div class="hb"><span class="l">BST</span><span class="tr"><i style="width:${(d.bstCmp / maxCmp * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v">${d.bstCmp}</span></div></div>
+      <div class="chart"><h4>Average latency (µs)</h4><div class="leg"><span class="a">General Tree</span><span class="b">Name BST</span></div>
+        <div class="hb"><span class="l">Tree</span><span class="tr"><i style="width:${(d.treeUs / maxUs * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v">${d.treeUs.toFixed(2)} µs</span></div>
+        <div class="hb"><span class="l">BST</span><span class="tr"><i style="width:${(d.bstUs / maxUs * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v">${d.bstUs.toFixed(2)} µs</span></div></div>
+      </div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Compare Search';
+  }
+}
+$('#raceBtn').onclick = guard(runRace);
+$('#raceQ').onkeydown = e => { if (e.key === 'Enter') $('#raceBtn').click(); };
+
+async function runScalingBench() {
+  const btn = $('#benchRunBtn');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  try {
+    const d = await api('/api/benchmark?sorted=' + benchSorted);
+    const rows = d.rows || [];
+    if (!rows.length) return;
+    const last = rows[rows.length - 1];
+    const peakSpeedup = Math.max(...rows.map(r => r.speedup));
+    $('#benchNote').innerHTML = d.sorted
+      ? `<div class="note"><b>Sorted input:</b> The unbalanced Name BST reached height <b>${last.bstHeight}</b> at N = ${last.n.toLocaleString()}, so its search cost grows toward O(n).</div>`
+      : `<div class="note"><b>Random input:</b> Compare the full tree scan with the Name BST at each dataset size. This sample’s BST height is <b>${last.bstHeight}</b> at N = ${last.n.toLocaleString()}.</div>`;
+    statCards($('#benchStats'), [
+      ['Largest dataset', last.n.toLocaleString(), last.queries + ' queries'],
+      ['Peak speedup', peakSpeedup.toFixed(1) + '×', 'tree/BST time ratio'],
+      ['Tree comparisons', Math.round(last.treeAvgCmp).toLocaleString(), 'average per query'],
+      ['BST comparisons', last.bstAvgCmp.toFixed(1), 'height ' + last.bstHeight]
+    ]);
+    const maxMs = Math.max(0.01, ...rows.flatMap(r => [r.treeMs, r.bstMs]));
+    const maxCmp = Math.max(1, ...rows.flatMap(r => [r.treeAvgCmp, r.bstAvgCmp]));
+    $('#benchCharts').innerHTML = `<div class="chart"><h4>Total search time (ms)</h4><div class="leg"><span class="a">General Tree DFS</span><span class="b">Name BST</span></div>${rows.map(r => `<div class="grp"><small>N = ${r.n.toLocaleString()} (${r.queries} queries)</small><div class="hb"><span class="l">Tree</span><span class="tr"><i style="width:${(r.treeMs / maxMs * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v">${r.treeMs.toFixed(3)} ms</span></div><div class="hb"><span class="l">BST</span><span class="tr"><i style="width:${(r.bstMs / maxMs * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v">${r.bstMs.toFixed(3)} ms</span></div></div>`).join('')}</div>
+      <div class="chart"><h4>Average comparisons per query</h4><div class="leg"><span class="a">General Tree DFS</span><span class="b">Name BST</span></div>${rows.map(r => `<div class="grp"><small>N = ${r.n.toLocaleString()} (BST height ${r.bstHeight})</small><div class="hb"><span class="l">Tree</span><span class="tr"><i style="width:${(r.treeAvgCmp / maxCmp * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v">${r.treeAvgCmp.toFixed(1)}</span></div><div class="hb"><span class="l">BST</span><span class="tr"><i style="width:${(r.bstAvgCmp / maxCmp * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v">${r.bstAvgCmp.toFixed(1)}</span></div></div>`).join('')}</div>`;
+    $('#benchTbody').innerHTML = rows.map(r => `<tr><th scope="row">${r.n.toLocaleString()}</th><td>${r.treeMs.toFixed(3)}</td><td>${r.bstMs.toFixed(3)}</td><td>${r.treeAvgCmp.toFixed(1)}</td><td>${r.bstAvgCmp.toFixed(1)}</td><td>${r.bstHeight}</td><td><b>${r.speedup.toFixed(1)}×</b></td></tr>`).join('');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run Benchmark';
+  }
+}
+$('#benchRunBtn').onclick = guard(runScalingBench);
 
 /* ---------- boot */
 (async () => {

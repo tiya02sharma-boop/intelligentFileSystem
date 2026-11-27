@@ -38,6 +38,21 @@ void LinkedList::remove(Node* item) {
     item->next = nullptr;
 }
 
+void LinkedList::sort(Node* directory) {
+    if (!directory) return;
+    Node* sorted = nullptr;
+    Node* current = directory->firstChild;
+    while (current) {
+        Node* next = current->next;
+        Node** place = &sorted;
+        while (*place && (*place)->name < current->name) place = &(*place)->next;
+        current->next = *place;
+        *place = current;
+        current = next;
+    }
+    directory->firstChild = sorted;
+}
+
 SortedStringList::SortedStringList() : first(nullptr) {}
 SortedStringList::~SortedStringList() {
     while (first) { Item* old = first; first = first->next; delete old; }

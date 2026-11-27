@@ -8,6 +8,7 @@ public:
     static Node* find(Node* directory, const std::string& name, long long* steps = nullptr);
     static void insert(Node* directory, Node* item);
     static void remove(Node* item);
+    static void sort(Node* directory);
 };
 
 class SortedStringList {

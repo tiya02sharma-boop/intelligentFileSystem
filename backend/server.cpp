@@ -280,6 +280,78 @@ static Resp api(const std::string& method, const std::string& route, Query& q) {
              ",\"sizeBstFiles\":" + std::to_string(fs.sizeBst.totalFiles());
         return ok(o + "}");
     }
+    if (route == "/api/benchmark") {
+        bool sorted = need("sorted") == "1" || need("sorted") == "true";
+        std::vector<size_t> sizes = {100, 500, 1000, 2500, 5000};
+        if (!need("sizes").empty()) {
+            std::vector<size_t> parsed;
+            std::stringstream ss(need("sizes"));
+            std::string tok;
+            while (std::getline(ss, tok, ',') && parsed.size() < 8) {
+                try {
+                    long long v = std::stoll(tok);
+                    if (v >= 10 && v <= 10000) parsed.push_back((size_t)v);
+                } catch (...) {}
+            }
+            if (!parsed.empty()) sizes = parsed;
+        }
+        auto rows = runTreeVsBstBenchmark(sizes, sorted);
+        std::ostringstream o;
+        o << std::fixed << std::setprecision(4);
+        o << "{\"ok\":true,\"sorted\":" << (sorted ? "true" : "false") << ",\"rows\":[";
+        for (size_t i = 0; i < rows.size(); ++i) {
+            const auto& r = rows[i];
+            double speedup = r.bstMs > 0.0001 ? r.treeMs / r.bstMs : 0.0;
+            if (i) o << ",";
+            o << "{\"n\":" << r.n
+              << ",\"queries\":" << r.queries
+              << ",\"treeMs\":" << r.treeMs
+              << ",\"bstMs\":" << r.bstMs
+              << ",\"treeAvgCmp\":" << r.treeAvgCmp
+              << ",\"bstAvgCmp\":" << r.bstAvgCmp
+              << ",\"bstHeight\":" << r.bstHeight
+              << ",\"speedup\":" << speedup << "}";
+        }
+        o << "]}";
+        return ok(o.str());
+    }
+    if (route == "/api/race") {
+        std::string term = need("q");
+        if (term.empty()) return fail(400, "Search query cannot be empty");
+        using clk = std::chrono::steady_clock;
+        const int iters = 200;
+        long long treeCmp = 0, bstCmp = 0;
+        std::vector<const Node*> treeRes, bstRes;
+        auto t0 = clk::now();
+        for (int i = 0; i < iters; ++i) {
+            treeCmp = 0;
+            treeRes = fs.searchTreeExact(term, treeCmp);
+        }
+        auto t1 = clk::now();
+        double treeUs = std::chrono::duration<double, std::micro>(t1 - t0).count() / iters;
+
+        t0 = clk::now();
+        for (int i = 0; i < iters; ++i) {
+            bstCmp = 0;
+            bstRes = fs.searchExact(term, bstCmp);
+        }
+        t1 = clk::now();
+        double bstUs = std::chrono::duration<double, std::micro>(t1 - t0).count() / iters;
+
+        Stats st = fs.stats(fs.root);
+        std::ostringstream o;
+        o << std::fixed << std::setprecision(2);
+        o << "{\"ok\":true,\"query\":" << js(term)
+          << ",\"matches\":" << bstRes.size()
+          << ",\"totalNodes\":" << (st.files + st.dirs)
+          << ",\"bstKeys\":" << fs.bst.keys()
+          << ",\"bstHeight\":" << fs.bst.height()
+          << ",\"treeCmp\":" << treeCmp
+          << ",\"bstCmp\":" << bstCmp
+          << ",\"treeUs\":" << treeUs
+          << ",\"bstUs\":" << bstUs << "}";
+        return ok(o.str());
+    }
     if (route == "/api/search") {
         std::string mode = need("mode");
         if (mode == "size_range") {
