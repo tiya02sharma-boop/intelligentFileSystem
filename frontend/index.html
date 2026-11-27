@@ -352,11 +352,12 @@ h1{color:#fff;text-shadow:0 2px 14px rgba(43,24,80,.35)}
             <span class="hint" style="color:var(--muted)">200 repeated searches, measured by the C++ backend</span>
           </div>
           <div class="toolbar" style="margin-bottom:12px">
-            <div class="field" style="margin:0;flex:1;min-width:200px"><label for="raceQ">Exact file or folder name</label><input id="raceQ" type="text" placeholder="e.g. resume.pdf" autocomplete="off"></div>
+            <div class="field" style="margin:0;flex:1;min-width:200px"><label for="raceQ">Exact file or folder name</label><input id="raceQ" type="text" placeholder="e.g. Resume.pdf, tree.cpp, song1.mp3" autocomplete="off"></div>
             <button class="btn b-teal" id="raceBtn">Compare Search</button>
           </div>
           <div id="raceInfo" aria-live="polite"></div>
           <div id="raceBars"></div>
+          <div class="list" id="raceRes" style="margin-top:14px"></div>
         </div>
         <div class="panel">
           <div class="bench-panel-head">
@@ -889,6 +890,7 @@ async function runRace() {
         <div class="hb"><span class="l">Tree</span><span class="tr"><i style="width:${(d.treeUs / maxUs * 100).toFixed(1)}%;background:#7B4BB5"></i></span><span class="v">${d.treeUs.toFixed(2)} µs</span></div>
         <div class="hb"><span class="l">BST</span><span class="tr"><i style="width:${(d.bstUs / maxUs * 100).toFixed(1)}%;background:#27A59E"></i></span><span class="v">${d.bstUs.toFixed(2)} µs</span></div></div>
       </div>`;
+    resultList($('#raceRes'), d.results || []);
   } finally {
     btn.disabled = false;
     btn.textContent = 'Compare Search';

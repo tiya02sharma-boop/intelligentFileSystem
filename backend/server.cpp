@@ -349,7 +349,8 @@ static Resp api(const std::string& method, const std::string& route, Query& q) {
           << ",\"treeCmp\":" << treeCmp
           << ",\"bstCmp\":" << bstCmp
           << ",\"treeUs\":" << treeUs
-          << ",\"bstUs\":" << bstUs << "}";
+          << ",\"bstUs\":" << bstUs
+          << ",\"results\":" << listJson(bstRes) << "}";
         return ok(o.str());
     }
     if (route == "/api/search") {
